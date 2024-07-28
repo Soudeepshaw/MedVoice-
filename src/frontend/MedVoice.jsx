@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 
-const genAI = new GoogleGenerativeAI(process.env.REACT_APP_GOOGLE_API_KEY);
+const genAI = new GoogleGenerativeAI("AIzaSyCEItIAVCnm56UPvk4Vm9cvqg3RAa4GfSg");
 
 export function MedVoice({ toggleDarkMode, isDarkMode }) {
   const [isListening, setIsListening] = useState(false);
