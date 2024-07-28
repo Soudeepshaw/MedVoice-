@@ -4,8 +4,7 @@ import debounce from 'lodash/debounce';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import jsPDF from 'jspdf';
-import dotenv from 'dotenv';
-dotenv.config();
+
 
 
 const genAI = new GoogleGenerativeAI("AIzaSyCEItIAVCnm56UPvk4Vm9cvqg3RAa4GfSg");
