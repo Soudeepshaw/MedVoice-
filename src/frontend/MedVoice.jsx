@@ -4,9 +4,11 @@ import debounce from 'lodash/debounce';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import jsPDF from 'jspdf';
+import dotenv from 'dotenv';
+dotenv.config();
 
 
-const genAI = new GoogleGenerativeAI("AIzaSyD4CN_lkB191mHdvQWxz5XsocvmnKzEQQ8");
+const genAI = new GoogleGenerativeAI(process.env.REACT_APP_GOOGLE_API_KEY);
 
 export function MedVoice({ toggleDarkMode, isDarkMode }) {
   const [isListening, setIsListening] = useState(false);
@@ -39,16 +41,14 @@ export function MedVoice({ toggleDarkMode, isDarkMode }) {
       setRecognition(recognitionInstance);
 
       recognitionInstance.onresult = (event) => {
-        let interimTranscript = '';
+        
         let finalTranscript = '';
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const transcript = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
             finalTranscript += transcript + ' ';
-          } else {
-            interimTranscript += transcript;
-          }
+          } 
         }
 
         if (finalTranscript) {
@@ -62,7 +62,7 @@ export function MedVoice({ toggleDarkMode, isDarkMode }) {
         }
       };
     }
-  }, []);
+  }, [isListening, updateTranscriptDebounced]);
 
   const startListening = useCallback(() => {
     if (recognition && !isListening) {
@@ -156,7 +156,7 @@ export function MedVoice({ toggleDarkMode, isDarkMode }) {
       console.log('Extracted info:', fixedJsonResponse);
       showNotification('Information extracted. Please enter the hospital/clinic name before generating PDF.');
     } catch (error) {
-      showNotification(`Error processing with Gemini: ${error.message}`);
+      console.log(`Error processing with Gemini: ${error.message}`);
     } finally {
       setIsProcessing(false);
       showNotification('Gemini processing completed');
@@ -216,6 +216,21 @@ export function MedVoice({ toggleDarkMode, isDarkMode }) {
       doc.text(extractedInfo["Past tests"], margin, yPos);
       yPos += 10;
     
+      // Add Symptoms 
+      doc.setFont("helvetica", "bold");
+      doc.text("Symptoms", margin, yPos);
+      yPos += 8;
+      doc.setFont("helvetica", "normal");
+
+      // Ensure symptoms are in string format
+      const symptomsText = Array.isArray(extractedInfo["Symptom"]) 
+        ? extractedInfo["Symptom"].join(", ") 
+        : String(extractedInfo["Symptom"] || "");
+
+      // Use splitTextToSize to handle long text
+      const splitSymptoms = doc.splitTextToSize(symptomsText, pageWidth - 2 * margin);
+      doc.text(splitSymptoms, margin, yPos);
+      yPos += splitSymptoms.length * 7;
       // Add recommended doses
       doc.setFont("helvetica", "bold");
       doc.text("Recommended Doses", margin, yPos);
@@ -232,6 +247,8 @@ export function MedVoice({ toggleDarkMode, isDarkMode }) {
       });
     
       yPos += 5;
+
+      
     
       // Add medicine names
       doc.setFont("helvetica", "bold");
@@ -247,8 +264,10 @@ export function MedVoice({ toggleDarkMode, isDarkMode }) {
         doc.text(medicine, margin, yPos);
         yPos += 7;
       });
-    
-      doc.save('medical_prescription.pdf');
+      const fileName = `${extractedInfo["Name of the person"]}_${extractedInfo["Name of the doctor"]}_${hospitalName}_prescription.pdf`.replace(/\s+/g, '_');
+doc.save(fileName);
+
+      
     }
     else{
       if(extractedInfo){
@@ -268,7 +287,7 @@ export function MedVoice({ toggleDarkMode, isDarkMode }) {
   }, [isListening]);
 
   return (
-    <div className={`h-screen min-h-screen bg-gradient-to-br ${isDarkMode ? 'from-purple-900 via-blue-900 to-blue-600' : 'from-yellow-300 via-green-200 to-green-500'} transition-all duration-500`}>
+    <div className={`h-screen min-h-screen bg-gradient-to-br ${isDarkMode ? 'from-purple-900 via-blue-900 to-blue-600' : 'from-yellow-300 via-green-200 to-green-500'} transition-all duration-500 font-sans`}>
       <div className={`flex flex-col md:flex-row items-start justify-start px-4 py-8 gap-8`}>
       <button className="md:hidden p-2 rounded-md bg-gray-700 hover:bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-gray-400" onClick={() => setIsMenuOpen(!isMenuOpen)}>
         <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -288,30 +307,32 @@ export function MedVoice({ toggleDarkMode, isDarkMode }) {
           <button className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-gray-400 backdrop-filter backdrop-blur-lg bg-opacity-50" onClick={toggleDarkMode}>
             {isDarkMode ? 'Light Mode' : 'Dark Mode'}
           </button>
-          <button 
-            className={`px-4 py-2 rounded-md text-white font-medium shadow-md ${isListening ? 'bg-red-500' : 'bg-blue-500'} hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 w-full flex items-center justify-center`}
-            onClick={isListening ? stopListening : startListening}
-          >
-            {isListening ? (
-              <>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
-                </svg>
-                Stop Listening
-              </>
-            ) : (
-              'Start Listening'
-            )}
-          </button>
+          <div className="flex flex-col gap-4 w-full">
+            <button 
+              className={`px-4 py-2 rounded-md text-white font-medium shadow-md ${isListening ? 'bg-red-500' : 'bg-blue-500'} hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 w-full flex items-center justify-center`}
+              onClick={isListening ? stopListening : startListening}
+            >
+              {isListening ? (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
+                  </svg>
+                  Stop Listening
+                </>
+              ) : (
+                'Start Listening'
+              )}
+            </button>
 
-          <button className="px-4 py-2 rounded-md bg-gray-600 hover:bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50 w-full shadow-md"
-            onClick={continueListening} disabled={isListening}>
-            Continue Listening
-          </button>
-          <button className="px-4 py-2 rounded-md bg-yellow-400 hover:bg-yellow-500 text-white focus:outline-none focus:ring-2 focus:ring-yellow-300 disabled:opacity-50 w-full shadow-md"
-            onClick={restartListening} disabled={isListening}>
-            Restart Listening
-          </button>
+            <button className="px-4 py-2 rounded-md bg-gray-600 hover:bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50 w-full shadow-md"
+              onClick={continueListening} disabled={isListening}>
+              Continue Listening
+            </button>
+            <button className="px-4 py-2 rounded-md bg-yellow-400 hover:bg-yellow-500 text-white focus:outline-none focus:ring-2 focus:ring-yellow-300 disabled:opacity-50 w-full shadow-md"
+              onClick={restartListening} disabled={isListening}>
+              Restart Listening
+            </button>
+          </div>
 
           <div className="flex flex-col gap-4 mt-8 w-full rounded-lg p-4 bg-opacity-50 backdrop-blur-lg">
             <button className="px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-400 w-full shadow-md"
@@ -335,7 +356,7 @@ export function MedVoice({ toggleDarkMode, isDarkMode }) {
           </div>
         </div>
 
-        <div className="flex-1 rounded-lg shadow-lg p-4 md:p-8 md:ml-0">
+        <div className="flex-1 rounded-lg shadow-lg p-4 md:p-8 md:ml-0 bg-gray-800 bg-opacity-50 backdrop-blur-lg" style={{backgroundColor: isDarkMode ? '' : ''}}>
           <div className='flex flex-col justify-center items-center gap-y-4 w-full'>
             <h1 className={`text-2xl md:text-4xl font-bold text-center ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Speech to Doctor Prescription</h1>
             <textarea
@@ -345,12 +366,12 @@ export function MedVoice({ toggleDarkMode, isDarkMode }) {
                 readOnly={!isEditing}
               />
             {Object.keys(extractedInfo).length > 0 && (
-              <div className="extracted-info bg-opacity-50 backdrop-blur-lg p-6 rounded-lg shadow-lg w-full">
+              <div className="extracted-info p-6 rounded-lg w-full">
                 <h2 className="text-xl font-bold mb-4 text-white">Extracted Information</h2>
                 <div className='grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto' style={{ maxHeight: '24rem' }}> 
                   {Object.entries(extractedInfo).map(([key, value]) => (
                     <div key={key} className="mb-2">
-                      <label htmlFor={key} className="block text-sm font-medium text-gray-200">
+                      <label htmlFor={key} className={`block text-sm font-medium  ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                         {key}:
                       </label>
                       {Array.isArray(value) ? (
@@ -390,6 +411,9 @@ export function MedVoice({ toggleDarkMode, isDarkMode }) {
                     </div>
                   ))}
                 </div>
+                <label className={`block text-sm font-medium  ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                Enter Hospital/Clinic Name 
+                      </label>
                 <input
                     type="text"
                     placeholder="Enter Hospital/Clinic Name"
